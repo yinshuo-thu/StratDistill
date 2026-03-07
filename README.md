@@ -52,6 +52,13 @@ cd "/Users/yinshuo/Documents/code-iCloud/strategy distillation"
 PYTHONPATH=src python3 scripts/refresh.py --max-vaults 300 --top-n 50
 ```
 
+## 6) 全量更新（刷新 + 详情抓取 + 可视化）
+
+```bash
+cd "/Users/yinshuo/Documents/code-iCloud/strategy distillation"
+PYTHONPATH=src python3 scripts/update_all.py --max-vaults 400 --top-n 100 --details-top-k 250
+```
+
 ## 6) 输出产物
 
 - `data/raw/vaults_stats_*.json`：原始抓取快照

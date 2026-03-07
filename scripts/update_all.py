@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+import argparse
+import json
+
+from stratdistill.pipeline import run_refresh
+from stratdistill.enrich import run_enrichment
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run full StratDistill pipeline: refresh + enrichment + visualization")
+    parser.add_argument("--max-vaults", type=int, default=300)
+    parser.add_argument("--top-n", type=int, default=50)
+    parser.add_argument("--details-top-k", type=int, default=200)
+    args = parser.parse_args()
+
+    a = run_refresh(max_vaults=args.max_vaults, top_n=args.top_n)
+    b = run_enrichment(top_k=args.details_top_k)
+
+    print(
+        json.dumps(
+            {
+                "refresh": {
+                    "raw_vaults_json": str(a.raw_vaults_json),
+                    "master_csv": str(a.master_csv),
+                    "top_csv": str(a.top_csv),
+                    "report_md": str(a.report_md),
+                },
+                "enrich": {
+                    "details_csv": str(b.details_csv),
+                    "ranking_csv": str(b.ranking_csv),
+                    "fig_dir": str(b.fig_dir),
+                    "figures": [str(x) for x in b.figures],
+                },
+                "params": vars(args),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()
