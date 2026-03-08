@@ -54,7 +54,29 @@ cd "/Users/yinshuo/Documents/code-iCloud/strategy distillation"
 PYTHONPATH=src python3 scripts/update_all.py --max-vaults 400 --top-n 100 --details-top-k 250 --cluster-k 5
 ```
 
-## 6) 输出
+## 6) 前端可视化网站（收益时序 + action proxy）
+
+生成网站数据：
+
+```bash
+cd "/Users/yinshuo/Documents/code-iCloud/strategy distillation"
+python3 scripts/build_web_data.py --top-n 80 --max-fills-per-strategy 1200
+```
+
+本地启动：
+
+```bash
+cd "/Users/yinshuo/Documents/code-iCloud/strategy distillation/web"
+python3 -m http.server 8080
+# 浏览器打开 http://127.0.0.1:8080
+```
+
+页面能力：
+- 可选策略（Top N）
+- 可切换 day/week/month/allTime 收益序列
+- 可查看 action proxy 点位（全部 / 开仓类 / 平仓类）
+
+## 7) 输出
 
 - 原始：
   - `data/raw/vaults_stats_*.json`

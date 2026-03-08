@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StratDistill Dashboard</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; margin: 18px; }
+    .row { display:flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .card { border:1px solid #ddd; border-radius:10px; padding:12px; margin-top:10px; }
+    #seriesChart, #actionChart { width:100%; height:420px; }
+    .meta { color:#444; font-size:13px; }
+  </style>
+</head>
+<body>
+  <h2>StratDistill Top Strategies Dashboard</h2>
+  <div class="meta">说明：action 来自公开 <code>userFills</code>，按 leader 聚合，作为 position/action proxy（非逐策略私有账本）。</div>
+
+  <div class="row card">
+    <label>选择策略：</label>
+    <select id="strategySelect"></select>
+    <label>收益序列：</label>
+    <select id="seriesType">
+      <option value="allTime">allTime</option>
+      <option value="month">month</option>
+      <option value="week">week</option>
+      <option value="day">day</option>
+    </select>
+    <label>行为点位：</label>
+    <select id="actionMode">
+      <option value="all">全部</option>
+      <option value="open">Open/Buy/Sell</option>
+      <option value="close">Close</option>
+    </select>
+  </div>
+
+  <div class="card" id="summary"></div>
+  <div class="card"><div id="seriesChart"></div></div>
+  <div class="card"><div id="actionChart"></div></div>
+
+  <script>
+    let DATA = null;
+
+    function fmt(n){
+      if(n===null || n===undefined || Number.isNaN(n)) return '-';
+      return Number(n).toLocaleString(undefined,{maximumFractionDigits:4});
+    }
+
+    function filteredActions(fills, mode){
+      if(mode==='all') return fills;
+      return fills.filter(f => {
+        const d=(f.dir||'').toLowerCase();
+        if(mode==='close') return d.includes('close');
+        return d.includes('buy') || d.includes('sell') || d.includes('long') || d.includes('short');
+      });
+    }
+
+    function render(){
+      const idx = Number(document.getElementById('strategySelect').value || 0);
+      const sType = document.getElementById('seriesType').value;
+      const aMode = document.getElementById('actionMode').value;
+      const s = DATA.strategies[idx];
+
+      document.getElementById('summary').innerHTML = `
+        <b>${s.name}</b><br/>
+        rank: ${s.extended_rank} | score: ${fmt(s.extended_score)} | APR: ${fmt(s.apr)} | TVL: ${fmt(s.tvl)}<br/>
+        vault: <code>${s.vault_address}</code><br/>
+        leader: <code>${s.leader || '-'}</code><br/>
+        series points: ${s.series.length} | fills: ${s.fills.length}
+      `;
+
+      const ser = s.series.filter(x => x.series===sType);
+      Plotly.newPlot('seriesChart', [{
+        x: ser.map(x=>x.idx),
+        y: ser.map(x=>x.value),
+        type:'scatter', mode:'lines', name:`${sType} pnl`
+      }], {
+        title:`${s.name} - ${sType} PnL Series`,
+        xaxis:{title:'Index'}, yaxis:{title:'PnL'}
+      }, {responsive:true});
+
+      const acts = filteredActions(s.fills, aMode);
+      const times = acts.map(x => new Date(x.time));
+      const pnls = acts.map(x => x.closedPnl || 0);
+      const colors = pnls.map(v => v>=0 ? '#2ca02c' : '#d62728');
+      const texts = acts.map(x => `${x.dir} ${x.coin}<br>px=${fmt(x.px)} sz=${fmt(x.sz)} pnl=${fmt(x.closedPnl)}`);
+
+      Plotly.newPlot('actionChart', [{
+        x: times,
+        y: pnls,
+        mode:'markers',
+        type:'scatter',
+        marker:{size:7,color:colors,opacity:0.75},
+        text:texts,
+        hovertemplate:'%{text}<br>%{x}<extra></extra>'
+      }], {
+        title:`${s.name} - Action Proxy (${aMode})`,
+        xaxis:{title:'Time'}, yaxis:{title:'closedPnl (per fill)'}
+      }, {responsive:true});
+    }
+
+    async function boot(){
+      const resp = await fetch('./data/top_strategies.json');
+      DATA = await resp.json();
+      const sel = document.getElementById('strategySelect');
+      DATA.strategies.forEach((s, i) => {
+        const o = document.createElement('option');
+        o.value = String(i);
+        o.textContent = `#${s.extended_rank} ${s.name}`;
+        sel.appendChild(o);
+      });
+      ['strategySelect','seriesType','actionMode'].forEach(id => {
+        document.getElementById(id).addEventListener('change', render);
+      });
+      render();
+    }
+
+    boot();
+  </script>
+</body>
+</html>
