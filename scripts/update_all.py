@@ -4,6 +4,7 @@ import json
 
 from stratdistill.pipeline import run_refresh
 from stratdistill.enrich import run_enrichment
+from stratdistill.clustering import run_clustering
 
 
 def main() -> None:
@@ -11,10 +12,12 @@ def main() -> None:
     parser.add_argument("--max-vaults", type=int, default=300)
     parser.add_argument("--top-n", type=int, default=50)
     parser.add_argument("--details-top-k", type=int, default=200)
+    parser.add_argument("--cluster-k", type=int, default=5)
     args = parser.parse_args()
 
     a = run_refresh(max_vaults=args.max_vaults, top_n=args.top_n)
     b = run_enrichment(top_k=args.details_top_k)
+    c = run_clustering(k=args.cluster_k)
 
     print(
         json.dumps(
@@ -30,6 +33,12 @@ def main() -> None:
                     "ranking_csv": str(b.ranking_csv),
                     "fig_dir": str(b.fig_dir),
                     "figures": [str(x) for x in b.figures],
+                },
+                "cluster": {
+                    "cluster_csv": str(c.cluster_csv),
+                    "summary_csv": str(c.summary_csv),
+                    "report_md": str(c.report_md),
+                    "figures": [str(x) for x in c.figures],
                 },
                 "params": vars(args),
             },
