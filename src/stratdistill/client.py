@@ -26,3 +26,8 @@ class HyperliquidClient:
     def fetch_vault_details(self, info_url: str, vault_address: str) -> Dict[str, Any]:
         payload = {"type": "vaultDetails", "vaultAddress": vault_address}
         return self._request("POST", info_url, json=payload).json()
+
+    def fetch_user_fills(self, info_url: str, user: str) -> List[Dict[str, Any]]:
+        payload = {"type": "userFills", "user": user}
+        out = self._request("POST", info_url, json=payload).json()
+        return out if isinstance(out, list) else []
