@@ -9,7 +9,7 @@
     body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; margin: 18px; color: #1f2937; }
     .row { display:flex; gap: 14px; align-items: center; flex-wrap: wrap; }
     .card { border:1px solid #ddd; border-radius:10px; padding:12px; margin-top:10px; background:#fff; }
-    #seriesChart, #actionChart { width:100%; height:460px; }
+    #seriesChart, #actionChart { width:100%; height:520px; }
     .meta { color:#4b5563; font-size:13px; line-height:1.6; }
     .summary-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-top:10px; }
     .metric { background:#f8fafc; border-radius:8px; padding:10px; }
@@ -23,7 +23,7 @@
   <h2>StratDistill Top Strategies Dashboard</h2>
   <div class="meta">
     说明：action 来自公开 <code>userFills</code>，按 leader 聚合，仅作为 position / action proxy。<br/>
-    图例说明：<b>PnL curve</b> = 蓝线；<b>绿色点</b> = closed pnl &gt; 0；<b>红色点</b> = closed pnl &lt; 0；<b>灰色点</b> = closed pnl ≈ 0 / N.A.；<b>▲</b> = buy / long / open；<b>▼</b> = sell / short；<b>✕</b> = close；点越大表示成交规模（|sz|）越大。
+    图例说明：<b>Account/NAV</b> = 黑线；<b>PnL curve</b> = 蓝线；<b>PnL points</b> = 蓝点；<b>绿色点</b> = closed pnl &gt; 0；<b>红色点</b> = closed pnl &lt; 0；<b>灰色点</b> = closed pnl ≈ 0 / N.A.；<b>▲</b> = buy / long / open；<b>▼</b> = sell / short；<b>✕</b> = close；点越大表示成交规模（|sz|）越大。
   </div>
   <div id="buildMeta" class="meta" style="margin-top:6px;"></div>
 
@@ -224,6 +224,14 @@
       `;
     }
 
+    function seriesX(series){
+      return hasTimeSeries(series) ? series.map(x => new Date(x.time)) : series.map(x => x.idx);
+    }
+
+    function seriesHover(series, label){
+      return hasTimeSeries(series) ? `${label}=%{y}<br>%{x}<extra></extra>` : `idx=%{x}<br>${label}=%{y}<extra></extra>`;
+    }
+
     function render(){
       const idx = Number(document.getElementById('strategySelect').value || 0);
       const sType = document.getElementById('seriesType').value;
@@ -231,45 +239,93 @@
       const s = DATA.strategies[idx];
       renderSummary(s);
 
-      const displaySeries = extractSeries(s, sType, 'preferred');
       const acts = filteredActions(s.fills, aMode).slice().sort((a, b) => (a.time || 0) - (b.time || 0));
-      const timedDisplaySeries = hasTimeSeries(displaySeries);
-      const displayLabel = displaySeries[0]?.source === 'accountValueHistory' ? `${sType} account value` : `${sType} pnl`;
-      const displayX = timedDisplaySeries ? displaySeries.map(x => new Date(x.time)) : displaySeries.map(x => x.idx);
-      const displayY = displaySeries.map(x => x.value);
-
-      Plotly.newPlot('seriesChart', [{
-        x: displayX,
-        y: displayY,
-        type:'scatter',
-        mode:'lines',
-        name: displayLabel,
-        line:{width:2, color:'#111827'},
-        hovertemplate: timedDisplaySeries ? 'value=%{y}<br>%{x}<extra></extra>' : 'idx=%{x}<br>value=%{y}<extra></extra>'
-      }], {
-        title:`${s.name} - ${sType} curve`,
-        xaxis:{title: timedDisplaySeries ? 'Time' : 'Index'},
-        yaxis:{title: displaySeries[0]?.source === 'accountValueHistory' ? 'Account Value / NAV' : 'PnL'},
-        legend:{orientation:'h'}
-      }, {responsive:true});
-
+      const accountSeries = extractSeries(s, sType, 'account');
       const pnlSeries = extractSeries(s, sType, 'pnl');
-      const timedPnlSeries = hasTimeSeries(pnlSeries);
-      const pnlX = timedPnlSeries ? pnlSeries.map(x => new Date(x.time)) : pnlSeries.map(x => x.idx);
-      const pnlY = pnlSeries.map(x => x.value);
-      const overlay = buildOverlayMarkers(pnlSeries, acts);
-      const detailTexts = overlay.map(x => `${x.dir || '-'} ${x.coin || ''}<br>fill px=${fmt(x.px)}<br>sz=${fmt(x.sz)}<br>closedPnl=${fmt(x.closedPnl)}<br>anchored to nearest pnl point`);
+      const preferredSeries = extractSeries(s, sType, 'preferred');
+      const overlayRefSeries = pnlSeries.length ? pnlSeries : (accountSeries.length ? accountSeries : preferredSeries);
+      const timedOverlayRef = hasTimeSeries(overlayRefSeries);
+      const overlay = buildOverlayMarkers(overlayRefSeries, acts);
+      const overlayTargetLabel = pnlSeries.length ? 'pnl' : (accountSeries.length ? 'account value' : 'curve');
+      const detailTexts = overlay.map(x => `${x.dir || '-'} ${x.coin || ''}<br>fill px=${fmt(x.px)}<br>sz=${fmt(x.sz)}<br>closedPnl=${fmt(x.closedPnl)}<br>anchored to nearest ${overlayTargetLabel} point`);
 
-      const actionTraces = [{
-        x: pnlX,
-        y: pnlY,
-        mode:'lines',
-        type:'scatter',
-        name:'PnL curve',
-        line:{width:2, color:'#2563eb'},
-        hovertemplate: timedPnlSeries ? 'pnl=%{y}<br>%{x}<extra></extra>' : 'idx=%{x}<br>pnl=%{y}<extra></extra>'
-      }];
+      const combinedTraces = [];
+      if(accountSeries.length){
+        combinedTraces.push({
+          x: seriesX(accountSeries),
+          y: accountSeries.map(x => x.value),
+          type:'scatter',
+          mode:'lines',
+          name:'Account / NAV',
+          line:{width:2, color:'#111827'},
+          hovertemplate: seriesHover(accountSeries, 'account')
+        });
+      }
+      if(pnlSeries.length){
+        combinedTraces.push({
+          x: seriesX(pnlSeries),
+          y: pnlSeries.map(x => x.value),
+          type:'scatter',
+          mode:'lines+markers',
+          name:'PnL curve',
+          yaxis:'y2',
+          line:{width:2, color:'#2563eb', shape:'linear'},
+          marker:{size:4, color:'#2563eb', opacity:0.7},
+          hovertemplate: seriesHover(pnlSeries, 'pnl')
+        });
+      }
+      if(overlay.length){
+        combinedTraces.push({
+          x: overlay.map(x => new Date(x.curveTime)),
+          y: overlay.map(x => x.curveValue),
+          mode:'markers',
+          type:'scatter',
+          name:'Actions (size=|sz|, color=closed pnl, shape=side)',
+          yaxis: pnlSeries.length ? 'y2' : 'y',
+          marker:{
+            size: overlay.map(actionSize),
+            color: overlay.map(actionColor),
+            symbol: overlay.map(actionSymbol),
+            line:{width:0.8, color:'#111827'},
+            opacity:0.9,
+          },
+          text: detailTexts,
+          hovertemplate:'%{text}<br>%{x}<extra></extra>'
+        });
+      }
 
+      const combinedLayout = {
+        title:`${s.name} - ${sType} combined view`,
+        xaxis:{title: (hasTimeSeries(accountSeries) || hasTimeSeries(pnlSeries)) ? 'Raw Time' : 'Index'},
+        yaxis:{title:'Account Value / NAV', side:'left'},
+        yaxis2:{title:'PnL', overlaying:'y', side:'right', showgrid:false},
+        legend:{orientation:'h'},
+        hovermode:'x unified',
+        annotations: []
+      };
+      if(!combinedTraces.length){
+        combinedLayout.annotations.push({
+          text:'No account / pnl series available for current strategy.',
+          xref:'paper', yref:'paper', x:0.5, y:0.95, showarrow:false, font:{size:12, color:'#6b7280'}
+        });
+      }
+      Plotly.newPlot('seriesChart', combinedTraces, combinedLayout, {responsive:true});
+
+      const detailSeries = pnlSeries.length ? pnlSeries : overlayRefSeries;
+      const detailTimed = hasTimeSeries(detailSeries);
+      const actionTraces = [];
+      if(detailSeries.length){
+        actionTraces.push({
+          x: seriesX(detailSeries),
+          y: detailSeries.map(x => x.value),
+          mode:'lines+markers',
+          type:'scatter',
+          name: pnlSeries.length ? 'PnL curve' : 'Fallback curve',
+          line:{width:2, color:'#2563eb', shape:'linear'},
+          marker:{size:5, color:'#2563eb', opacity:0.65},
+          hovertemplate: seriesHover(detailSeries, pnlSeries.length ? 'pnl' : 'value')
+        });
+      }
       if(overlay.length){
         actionTraces.push({
           x: overlay.map(x => new Date(x.curveTime)),
@@ -290,17 +346,22 @@
       }
 
       const actionLayout = {
-        title:`${s.name} - PnL with action overlay (${aMode})`,
-        xaxis:{title: timedPnlSeries ? 'Time' : 'Index'},
-        yaxis:{title:'PnL'},
+        title:`${s.name} - detailed ${pnlSeries.length ? 'PnL' : 'curve'} with action overlay (${aMode})`,
+        xaxis:{title: detailTimed ? 'Raw Time' : 'Index'},
+        yaxis:{title: pnlSeries.length ? 'PnL' : 'Value'},
         legend:{orientation:'h'},
         hovermode:'x unified',
         annotations: []
       };
 
-      if(!overlay.length){
+      if(!detailSeries.length){
         actionLayout.annotations.push({
-          text: timedPnlSeries ? 'No actions available for current filter.' : 'No timed PnL series in current data bundle. Re-run scripts/build_web_data.py to rebuild top_strategies.json.',
+          text: 'No timed PnL/account series in current data bundle. Re-run scripts/build_web_data.py to rebuild top_strategies.json.',
+          xref:'paper', yref:'paper', x:0.5, y:0.95, showarrow:false, font:{size:12, color:'#6b7280'}
+        });
+      } else if(!overlay.length){
+        actionLayout.annotations.push({
+          text: detailTimed ? 'No actions available for current filter.' : 'Current detailed curve has no raw timestamps, so actions cannot be anchored.',
           xref:'paper', yref:'paper', x:0.5, y:0.95, showarrow:false, font:{size:12, color:'#6b7280'}
         });
       }
@@ -309,7 +370,8 @@
     }
 
     async function boot(){
-      const resp = await fetch('./data/top_strategies.json');
+      const dataUrl = `./data/top_strategies.json?v=${Date.now()}`;
+      const resp = await fetch(dataUrl, { cache: 'no-store' });
       DATA = await resp.json();
       renderBuildMeta();
       const sel = document.getElementById('strategySelect');
