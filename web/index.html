@@ -6,31 +6,40 @@
   <title>StratDistill Dashboard</title>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
-    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; margin: 18px; }
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; margin: 18px; color: #1f2937; }
     .row { display:flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-    .card { border:1px solid #ddd; border-radius:10px; padding:12px; margin-top:10px; }
-    #seriesChart, #actionChart { width:100%; height:420px; }
-    .meta { color:#444; font-size:13px; }
+    .card { border:1px solid #ddd; border-radius:10px; padding:12px; margin-top:10px; background:#fff; }
+    #seriesChart, #actionChart { width:100%; height:460px; }
+    .meta { color:#4b5563; font-size:13px; line-height:1.6; }
+    .summary-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-top:10px; }
+    .metric { background:#f8fafc; border-radius:8px; padding:10px; }
+    .metric .label { font-size:12px; color:#6b7280; }
+    .metric .value { font-size:16px; font-weight:600; margin-top:4px; }
+    select { padding: 4px 8px; }
+    code { background:#f3f4f6; padding:1px 4px; border-radius:4px; }
   </style>
 </head>
 <body>
   <h2>StratDistill Top Strategies Dashboard</h2>
-  <div class="meta">说明：action 来自公开 <code>userFills</code>，按 leader 聚合，作为 position/action proxy（非逐策略私有账本）。</div>
+  <div class="meta">
+    说明：action 来自公开 <code>userFills</code>，按 leader 聚合，仅作为 position / action proxy。<br/>
+    当前主图会把 action marker 叠加到策略净值 / PnL 曲线上，方便观察“何时动手、动作之后曲线处于什么位置”。
+  </div>
 
   <div class="row card">
     <label>选择策略：</label>
     <select id="strategySelect"></select>
-    <label>收益序列：</label>
+    <label>序列窗口：</label>
     <select id="seriesType">
       <option value="allTime">allTime</option>
       <option value="month">month</option>
       <option value="week">week</option>
       <option value="day">day</option>
     </select>
-    <label>行为点位：</label>
+    <label>行为筛选：</label>
     <select id="actionMode">
       <option value="all">全部</option>
-      <option value="open">Open/Buy/Sell</option>
+      <option value="open">Open / Buy / Sell</option>
       <option value="close">Close</option>
     </select>
   </div>
@@ -42,9 +51,14 @@
   <script>
     let DATA = null;
 
-    function fmt(n){
-      if(n===null || n===undefined || Number.isNaN(n)) return '-';
-      return Number(n).toLocaleString(undefined,{maximumFractionDigits:4});
+    function fmt(n, digits = 4){
+      if(n===null || n===undefined || Number.isNaN(Number(n))) return '-';
+      return Number(n).toLocaleString(undefined,{maximumFractionDigits:digits});
+    }
+
+    function fmtPct(n, digits = 2){
+      if(n===null || n===undefined || Number.isNaN(Number(n))) return '-';
+      return `${(Number(n) * 100).toFixed(digits)}%`;
     }
 
     function filteredActions(fills, mode){
@@ -56,47 +70,169 @@
       });
     }
 
+    function actionSymbol(f){
+      const d = (f.dir || '').toLowerCase();
+      if(d.includes('close')) return 'circle';
+      if(d.includes('buy') || d.includes('long')) return 'triangle-up';
+      if(d.includes('sell') || d.includes('short')) return 'triangle-down';
+      return 'diamond';
+    }
+
+    function actionColor(f){
+      const d = (f.dir || '').toLowerCase();
+      const pnl = Number(f.closedPnl || 0);
+      if(d.includes('close')) return pnl >= 0 ? '#16a34a' : '#dc2626';
+      if(d.includes('buy') || d.includes('long')) return '#2563eb';
+      if(d.includes('sell') || d.includes('short')) return '#f59e0b';
+      return '#7c3aed';
+    }
+
+    function hasTimeSeries(series){
+      return series.some(x => x.time !== null && x.time !== undefined);
+    }
+
+    function nearestCurvePoint(points, targetTime){
+      if(!points.length) return null;
+      let lo = 0, hi = points.length - 1;
+      while(lo < hi){
+        const mid = Math.floor((lo + hi) / 2);
+        if(points[mid].time < targetTime) lo = mid + 1;
+        else hi = mid;
+      }
+      const candA = points[lo];
+      const candB = lo > 0 ? points[lo - 1] : null;
+      if(!candB) return candA;
+      return Math.abs(candA.time - targetTime) < Math.abs(candB.time - targetTime) ? candA : candB;
+    }
+
+    function buildOverlayMarkers(series, fills){
+      const timePoints = series
+        .filter(x => x.time !== null && x.time !== undefined)
+        .map(x => ({ time: Number(x.time), value: Number(x.value) }))
+        .sort((a, b) => a.time - b.time);
+      if(!timePoints.length) return [];
+
+      return fills
+        .filter(f => f.time)
+        .map(f => {
+          const pt = nearestCurvePoint(timePoints, Number(f.time));
+          if(!pt) return null;
+          return {
+            ...f,
+            curveTime: pt.time,
+            curveValue: pt.value,
+          };
+        })
+        .filter(Boolean);
+    }
+
+    function renderSummary(s){
+      document.getElementById('summary').innerHTML = `
+        <div><b>${s.name}</b></div>
+        <div class="meta" style="margin-top:6px;">
+          rank: ${s.extended_rank} | extended score: ${fmt(s.extended_score)} | composite score: ${fmt(s.composite_score)}<br/>
+          vault: <code>${s.vault_address}</code><br/>
+          leader: <code>${s.leader || '-'}</code>
+        </div>
+        <div class="summary-grid">
+          <div class="metric"><div class="label">APR</div><div class="value">${fmtPct(s.apr)}</div></div>
+          <div class="metric"><div class="label">TVL</div><div class="value">${fmt(s.tvl, 0)}</div></div>
+          <div class="metric"><div class="label">All-time PnL</div><div class="value">${fmt(s.pnl_all_time_last, 0)}</div></div>
+          <div class="metric"><div class="label">Max Drawdown</div><div class="value">${fmt(s.pnl_all_time_max_dd, 0)}</div></div>
+          <div class="metric"><div class="label">Stability (std ΔPnL)</div><div class="value">${fmt(s.pnl_all_time_stability, 0)}</div></div>
+          <div class="metric"><div class="label">Series / Fills</div><div class="value">${s.series.length} / ${s.fills.length}</div></div>
+        </div>
+      `;
+    }
+
     function render(){
       const idx = Number(document.getElementById('strategySelect').value || 0);
       const sType = document.getElementById('seriesType').value;
       const aMode = document.getElementById('actionMode').value;
       const s = DATA.strategies[idx];
+      renderSummary(s);
 
-      document.getElementById('summary').innerHTML = `
-        <b>${s.name}</b><br/>
-        rank: ${s.extended_rank} | score: ${fmt(s.extended_score)} | APR: ${fmt(s.apr)} | TVL: ${fmt(s.tvl)}<br/>
-        vault: <code>${s.vault_address}</code><br/>
-        leader: <code>${s.leader || '-'}</code><br/>
-        series points: ${s.series.length} | fills: ${s.fills.length}
-      `;
+      const ser = s.series
+        .filter(x => x.series === sType)
+        .slice()
+        .sort((a, b) => {
+          const ax = a.time ?? a.idx ?? 0;
+          const bx = b.time ?? b.idx ?? 0;
+          return ax - bx;
+        });
+      const acts = filteredActions(s.fills, aMode).slice().sort((a, b) => (a.time || 0) - (b.time || 0));
+      const timedSeries = hasTimeSeries(ser);
+      const lineName = ser[0]?.source === 'accountValueHistory' ? `${sType} account value` : `${sType} pnl`;
+      const lineX = timedSeries ? ser.map(x => new Date(x.time)) : ser.map(x => x.idx);
+      const lineY = ser.map(x => x.value);
 
-      const ser = s.series.filter(x => x.series===sType);
-      Plotly.newPlot('seriesChart', [{
-        x: ser.map(x=>x.idx),
-        y: ser.map(x=>x.value),
-        type:'scatter', mode:'lines', name:`${sType} pnl`
-      }], {
-        title:`${s.name} - ${sType} PnL Series`,
-        xaxis:{title:'Index'}, yaxis:{title:'PnL'}
+      const traces = [{
+        x: lineX,
+        y: lineY,
+        type:'scatter',
+        mode:'lines',
+        name: lineName,
+        line:{width:2, color:'#111827'},
+        hovertemplate: timedSeries ? 'value=%{y}<br>%{x}<extra></extra>' : 'idx=%{x}<br>value=%{y}<extra></extra>'
+      }];
+
+      const overlay = buildOverlayMarkers(ser, acts);
+      if(overlay.length){
+        traces.push({
+          x: overlay.map(x => new Date(x.curveTime)),
+          y: overlay.map(x => x.curveValue),
+          mode:'markers',
+          type:'scatter',
+          name:'actions on curve',
+          marker:{
+            size:10,
+            color: overlay.map(actionColor),
+            symbol: overlay.map(actionSymbol),
+            line:{width:0.5, color:'#111827'},
+            opacity:0.9,
+          },
+          text: overlay.map(x => `${x.dir || '-'} ${x.coin || ''}<br>fill px=${fmt(x.px)}<br>size=${fmt(x.sz)}<br>closedPnl=${fmt(x.closedPnl)}<br>marker anchored to nearest curve point`),
+          hovertemplate:'%{text}<br>%{x}<extra></extra>'
+        });
+      }
+
+      Plotly.newPlot('seriesChart', traces, {
+        title:`${s.name} - ${sType} curve with action overlay`,
+        xaxis:{title: timedSeries ? 'Time' : 'Index'},
+        yaxis:{title: ser[0]?.source === 'accountValueHistory' ? 'Account Value / NAV' : 'PnL'},
+        legend:{orientation:'h'}
       }, {responsive:true});
 
-      const acts = filteredActions(s.fills, aMode);
-      const times = acts.map(x => new Date(x.time));
-      const pnls = acts.map(x => x.closedPnl || 0);
-      const colors = pnls.map(v => v>=0 ? '#2ca02c' : '#d62728');
-      const texts = acts.map(x => `${x.dir} ${x.coin}<br>px=${fmt(x.px)} sz=${fmt(x.sz)} pnl=${fmt(x.closedPnl)}`);
-
-      Plotly.newPlot('actionChart', [{
-        x: times,
-        y: pnls,
-        mode:'markers',
-        type:'scatter',
-        marker:{size:7,color:colors,opacity:0.75},
-        text:texts,
-        hovertemplate:'%{text}<br>%{x}<extra></extra>'
-      }], {
-        title:`${s.name} - Action Proxy (${aMode})`,
-        xaxis:{title:'Time'}, yaxis:{title:'closedPnl (per fill)'}
+      const detailTimes = acts.map(x => new Date(x.time));
+      const detailTexts = acts.map(x => `${x.dir || '-'} ${x.coin || ''}<br>px=${fmt(x.px)}<br>sz=${fmt(x.sz)}<br>closedPnl=${fmt(x.closedPnl)}`);
+      Plotly.newPlot('actionChart', [
+        {
+          x: detailTimes,
+          y: acts.map(x => x.px || null),
+          mode:'markers+lines',
+          type:'scatter',
+          name:'fill price',
+          marker:{size:7, color:acts.map(actionColor), symbol:acts.map(actionSymbol), opacity:0.8},
+          text: detailTexts,
+          hovertemplate:'%{text}<br>%{x}<extra></extra>'
+        },
+        {
+          x: detailTimes,
+          y: acts.map(x => x.closedPnl || 0),
+          mode:'markers',
+          type:'scatter',
+          name:'closed pnl per fill',
+          yaxis:'y2',
+          marker:{size:7, color:acts.map(x => Number(x.closedPnl || 0) >= 0 ? '#16a34a' : '#dc2626'), opacity:0.55},
+          text: detailTexts,
+          hovertemplate:'%{text}<br>%{x}<extra></extra>'
+        }
+      ], {
+        title:`${s.name} - action details (${aMode})`,
+        xaxis:{title:'Time'},
+        yaxis:{title:'Fill Price'},
+        yaxis2:{title:'Closed PnL per Fill', overlaying:'y', side:'right', showgrid:false},
+        legend:{orientation:'h'}
       }, {responsive:true});
     }
 

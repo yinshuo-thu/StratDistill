@@ -1,17 +1,17 @@
 # Strategy Clustering Report
 
 - KMeans (numpy) with k=5
-- Inertia: 854.2505
+- Inertia: 948.3621
 
 ## Cluster Summary
 
 | Cluster | Name | Count | Median Score | Median APR | Median TVL | Median Drawdown |
 |---:|---|---:|---:|---:|---:|---:|
-| 3 | Steady Grinder C3 | 60 | 0.4462 | -0.007102 | 9526.88 | -2217.24 |
-| 4 | Steady Grinder C4 | 53 | 0.3484 | 0.079301 | 143489.04 | -31066.31 |
-| 1 | Steady Grinder C1 | 20 | 0.3136 | 3.895623 | 80992.54 | -14018.10 |
-| 2 | Steady Grinder C2 | 103 | 0.2920 | 0.432592 | 3157.77 | -92.16 |
-| 0 | Mixed Profile C0 | 7 | 0.2673 | 0.000023 | 1002202.23 | 0.00 |
+| 3 | Steady Grinder C3 | 49 | 0.4850 | -0.027105 | 35192.67 | -10344.55 |
+| 2 | Steady Grinder C2 | 85 | 0.3233 | 0.203904 | 9535.12 | -1536.33 |
+| 0 | Mixed Profile C0 | 6 | 0.3015 | 0.000029 | 15500000.15 | 0.00 |
+| 4 | Mixed Profile C4 | 33 | 0.2999 | 1.065364 | 216340.14 | -30029.58 |
+| 1 | Steady Grinder C1 | 82 | 0.2736 | 0.258775 | 2729.02 | -38.49 |
 
 ## Notes
 - Cluster names are semantic labels derived from centroid-like median traits.

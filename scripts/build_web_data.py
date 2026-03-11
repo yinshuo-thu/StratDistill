@@ -24,14 +24,73 @@ def _read_latest_leader_fills() -> Dict[str, Any]:
     return json.loads(files[-1].read_text(encoding="utf-8"))
 
 
-def _read_series(vault_addr: str) -> List[Dict[str, Any]]:
+def _read_latest_vault_details() -> Dict[str, Any]:
+    d = RAW / "vault_details"
+    files = sorted(d.glob("details_top*_*.json"))
+    if not files:
+        return {}
+    return json.loads(files[-1].read_text(encoding="utf-8"))
+
+
+def _safe_float(x: Any, default: float | None = None) -> float | None:
+    try:
+        return float(x)
+    except Exception:
+        return default
+
+
+def _extract_series_from_details(detail: Dict[str, Any]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    portfolio = detail.get("portfolio", [])
+    if not isinstance(portfolio, list):
+        return out
+
+    for item in portfolio:
+        if not isinstance(item, list) or len(item) != 2:
+            continue
+        label, payload = item
+        if not isinstance(payload, dict):
+            continue
+        hist = payload.get("accountValueHistory", [])
+        if not isinstance(hist, list):
+            continue
+        for idx, point in enumerate(hist):
+            if not isinstance(point, list) or len(point) < 2:
+                continue
+            out.append(
+                {
+                    "series": str(label),
+                    "idx": idx,
+                    "time": int(point[0]) if point[0] is not None else None,
+                    "value": _safe_float(point[1], 0.0),
+                    "source": "accountValueHistory",
+                }
+            )
+    return out
+
+
+def _read_series(vault_addr: str, details_map: Dict[str, Any]) -> List[Dict[str, Any]]:
+    detail = details_map.get(vault_addr)
+    if isinstance(detail, dict):
+        rows = _extract_series_from_details(detail)
+        if rows:
+            return rows
+
     p = PROCESSED / "timeseries" / f"{vault_addr}.csv"
     if not p.exists():
         return []
     df = pd.read_csv(p)
     out = []
     for _, r in df.iterrows():
-        out.append({"series": str(r.get("series")), "idx": int(r.get("idx", 0)), "value": float(r.get("value", 0.0))})
+        out.append(
+            {
+                "series": str(r.get("series")),
+                "idx": int(r.get("idx", 0)),
+                "time": None,
+                "value": float(r.get("value", 0.0)),
+                "source": "pnlSeries",
+            }
+        )
     return out
 
 
@@ -47,6 +106,7 @@ def main() -> None:
     top = rank.sort_values("extended_rank").head(args.top_n).copy()
 
     leader_fills = _read_latest_leader_fills()
+    details_map = _read_latest_vault_details()
 
     items = []
     for _, r in top.iterrows():
@@ -79,9 +139,13 @@ def main() -> None:
                 "leader": leader,
                 "extended_rank": int(r.get("extended_rank", 0)),
                 "extended_score": float(r.get("extended_score", 0.0)),
+                "composite_score": float(r.get("composite_score", 0.0)),
                 "apr": float(r.get("apr", 0.0)) if pd.notna(r.get("apr")) else None,
                 "tvl": float(r.get("tvl", 0.0)) if pd.notna(r.get("tvl")) else None,
-                "series": _read_series(vault),
+                "pnl_all_time_last": float(r.get("pnl_all_time_last", 0.0)) if pd.notna(r.get("pnl_all_time_last")) else None,
+                "pnl_all_time_max_dd": float(r.get("pnl_all_time_max_dd", 0.0)) if pd.notna(r.get("pnl_all_time_max_dd")) else None,
+                "pnl_all_time_stability": float(r.get("pnl_all_time_stability", 0.0)) if pd.notna(r.get("pnl_all_time_stability")) else None,
+                "series": _read_series(vault, details_map),
                 "fills": fill_rows,
             }
         )
@@ -91,11 +155,13 @@ def main() -> None:
             "top_n": args.top_n,
             "max_fills_per_strategy": args.max_fills_per_strategy,
             "note": "fills are leader-level public fills used as action/position proxy; may cover multiple vaults managed by same leader",
+            "series_note": "prefer accountValueHistory from latest vaultDetails raw snapshot; fallback to processed pnl series when timestamped detail history is unavailable",
         },
         "strategies": items,
     }
-    (WEB_DATA / "top_strategies.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    print(json.dumps({"out": str(WEB_DATA / 'top_strategies.json'), "strategies": len(items)}, ensure_ascii=False))
+    out_path = WEB_DATA / "top_strategies.json"
+    out_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps({"out": str(out_path), "strategies": len(items)}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

@@ -74,8 +74,15 @@ def _extract_pnl_features(pnls: List[Any]) -> Dict[str, float]:
     return out
 
 
-def _normalize_rank(s: pd.Series, asc: bool) -> pd.Series:
-    return s.rank(method="average", ascending=asc, pct=True).fillna(0.0)
+def _score_rank(s: pd.Series, higher_is_better: bool = True) -> pd.Series:
+    """Return percentile-like factor scores where higher score always means better.
+
+    pandas rank(pct=True) yields larger percentiles for larger ranks. So we choose
+    rank direction to ensure the preferred side ends up with the larger percentile:
+    - higher_is_better=True  -> ascending=True  -> larger values get larger scores
+    - higher_is_better=False -> ascending=False -> smaller values get larger scores
+    """
+    return s.rank(method="average", ascending=not higher_is_better, pct=True).fillna(0.0)
 
 
 def build_master(vaults: List[Dict[str, Any]]) -> pd.DataFrame:
@@ -100,13 +107,13 @@ def build_master(vaults: List[Dict[str, Any]]) -> pd.DataFrame:
 
     # Base factors (public-data-first): if a factor is mostly missing, dynamic weighting handles it.
     factor_scores = {
-        "apr": _normalize_rank(df["apr"], asc=False),
-        "tvl": _normalize_rank(df["tvl"], asc=False),
-        "followers": _normalize_rank(df["followers"], asc=False),
-        "pnl_all": _normalize_rank(df["pnl_all_time_last"], asc=False),
-        "drawdown": _normalize_rank(df["pnl_all_time_max_dd"].abs(), asc=True),
-        "stability": _normalize_rank(df["pnl_all_time_stability"], asc=True),
-        "data_quality": _normalize_rank(df["pnl_obs_count"], asc=False),
+        "apr": _score_rank(df["apr"], higher_is_better=True),
+        "tvl": _score_rank(df["tvl"], higher_is_better=True),
+        "followers": _score_rank(df["followers"], higher_is_better=True),
+        "pnl_all": _score_rank(df["pnl_all_time_last"], higher_is_better=True),
+        "drawdown": _score_rank(df["pnl_all_time_max_dd"].abs(), higher_is_better=False),
+        "stability": _score_rank(df["pnl_all_time_stability"], higher_is_better=False),
+        "data_quality": _score_rank(df["pnl_obs_count"], higher_is_better=True),
     }
     for k, v in factor_scores.items():
         df[f"score_{k}"] = v

@@ -1,14 +1,14 @@
 # Hyperliquid Strategy Distillation Report
 
-Generated at (UTC): 2026-03-08T03:41:02.587703+00:00
+Generated at (UTC): 2026-03-11T07:32:58.940020+00:00
 
 ## Data Sources
 - Official Info API: `POST https://api.hyperliquid.xyz/info`
 - Public stats dataset used for discovery: `GET https://stats-data.hyperliquid.xyz/Mainnet/vaults`
 
 ## Source Validation
-- info type=vaultSummaries response size: 1
-- stats vault records fetched: 9200
+- info type=vaultSummaries response size: 2
+- stats vault records fetched: 9212
 
 ## Known Limits
 - `vaultSummaries` currently returned empty array in test; discovery currently relies on public stats endpoint.
@@ -25,23 +25,23 @@ Generated at (UTC): 2026-03-08T03:41:02.587703+00:00
 
 | Rank | Name | Vault | APR | TVL | PnL(all time) | Max Drawdown | Stability(std ΔPnL) | Score |
 |---:|---|---|---:|---:|---:|---:|---:|---:|
-| 1 | Flagship by Fire Labs | `0x632df0dbe24f3dac3e1c4e0596c96a0adc3ba86a` | -0.019042 | 17830.62 | 2916.06 | -49531.62 | 32203.1525 | 0.5669 |
-| 2 | BTC/ETH CTA | AIM | `0xbeebbbe817a69d60dd62e0a942032bc5414dae1c` | -0.078655 | 96528.09 | 316.66 | -21288.09 | 9044.5641 | 0.5530 |
-| 3 | +convexity | `0x5661a070eb13c7c55ac3210b2447d4bea426cbf5` | -0.050814 | 494966.27 | 62591.81 | -38513.83 | 24590.9078 | 0.5519 |
-| 4 | [ Systemic Strategies ] ♾️ HyperGrowth ♾️ | `0xd6e56265890b76413d1d527eb9b75e334c0c5b42` | -0.079572 | 6831503.02 | 1919330.30 | -1317750.43 | 926030.4584 | 0.5427 |
-| 5 | ski lambo beach  | `0x66e541024ca4c50b8f6c0934b8947c487d211661` | -0.187276 | 92626.94 | 89705.49 | -39362.63 | 20903.2091 | 0.5391 |
-| 6 | Crypto Trading Channel | `0x51b62b4bf8df6f2795b3da30cb46aa47f9f230a8` | -0.055935 | 88997.47 | 17397.08 | -5268.14 | 4039.3196 | 0.5360 |
-| 7 | HighFDV | `0x78ab93343554d9b9fc7260f44844fad8f36d3d79` | -0.062162 | 2713.30 | 2019.94 | -1561.72 | 883.1002 | 0.5271 |
-| 8 | Delta Neutral | R Tech | `0xf182de5226dc4fe2f134c9b375281a6f50309416` | -0.408411 | 14008.78 | 113.89 | -10394.55 | 4631.1639 | 0.5252 |
-| 9 | Ethos Intel - Mvault | `0x79d3b973bd5bc4c6a98f5d2e0ee6e285910945ae` | -0.000449 | 7801.17 | 3082.59 | -1809.75 | 1046.3358 | 0.5198 |
-| 10 | Super Saiyan 孫悟空 | `0x7c5885d2974457eafb1a3a4d848c358111f0714d` | -0.209851 | 44520.13 | 170177.39 | -106881.37 | 69634.2544 | 0.5117 |
-| 11 | Jade Lotus Capital | `0xbc5bf88fd012612ba92c5bd96e183955801b7fdc` | -0.110346 | 202813.68 | 179770.73 | -129228.46 | 70650.0105 | 0.5093 |
-| 12 | Delta_01 | `0x3005fade4c0df5e1cd187d7062da359416f0eb8e` | -0.061170 | 488925.55 | 404495.40 | -270497.09 | 141850.8776 | 0.5082 |
-| 13 | Loop Fund | `0xfeab64de8cdf9dcebc0f49812499e396273efc06` | -0.164493 | 57467.88 | 65737.00 | -55724.50 | 23053.7224 | 0.5081 |
-| 14 | [ Sidelined ] Market Neutral 1 | `0xf4ab2cb15b7b3fa298555b801e9f5772ba8f8891` | -0.006916 | 36060.73 | 3538.26 | -2022.92 | 1428.3901 | 0.5048 |
-| 15 | HLP Strategy A | `0x010461c14e146ac35fe42271bdc1134ee31c703a` | -0.000758 | 121358406.69 | 4866967.96 | -7014131.28 | 3128752.8616 | 0.5040 |
-| 16 | Overdose | `0xe67dbf2d051106b42104c1a6631af5e5a458b682` | -0.046775 | 494241.95 | 170389.10 | -56031.61 | 51929.4835 | 0.5039 |
-| 17 | しねやボケェ！！！ | `0x7f9571cc340883ff8781dca34afd8d07e3c8147c` | -0.097891 | 4214.53 | 707.89 | -915.11 | 467.6553 | 0.5035 |
-| 18 | Octavious Maximus | `0x45c42fbd450b5506f8dc819d46036630fe75b81e` | -0.182914 | 16933.81 | 10394.61 | -8056.70 | 3577.5710 | 0.4960 |
-| 19 | TB10 (Top and Bottom 10) | `0xd8bc568c79e9a75563910e82e528596b49065cc9` | -0.034535 | 7512.17 | 194.23 | -502.70 | 228.5726 | 0.4914 |
-| 20 | emas | `0x8d4b1f07c630d7cc1d0ea0bf519c61f2885f46a5` | -0.007287 | 2615.17 | 558.24 | -3226.39 | 1116.5076 | 0.4906 |
+| 1 | Jade Lotus Capital | `0xbc5bf88fd012612ba92c5bd96e183955801b7fdc` | -0.248950 | 319928.92 | 192080.16 | -116919.04 | 69231.2338 | 0.5637 |
+| 2 | Equinox · Blackalgo | `0x7048b287889c5913d59f812795d7fd5d724be77a` | -0.043627 | 1070486.70 | 6131.87 | -82602.59 | 42265.7852 | 0.5445 |
+| 3 | C.A.T | `0xdfb729b4b789de6d13d6ad7ac8e2750909360af9` | -0.204618 | 6902.54 | 101.39 | -3448.44 | 1578.4045 | 0.5429 |
+| 4 | Sentiment Edge  | `0xb7e7d0fdeff5473ed6ef8d3a762d096a040dbb18` | -0.027105 | 165749.67 | 46184.91 | -33191.74 | 18015.1686 | 0.5340 |
+| 5 | OnDitMerciQui? | `0x057236927e2e2c8b3cd595746a051687ba40d1cc` | -0.101157 | 1222.45 | 176.21 | -2424.51 | 743.8513 | 0.5337 |
+| 6 | BTC/ETH CTA | AIM | `0xbeebbbe817a69d60dd62e0a942032bc5414dae1c` | -0.082126 | 96289.18 | 77.75 | -21288.09 | 9052.4905 | 0.5304 |
+| 7 | 22Cap | `0xba939edf38c0ae0cc689c98b492e0535f43e4550` | -0.015333 | 128812.18 | 56023.26 | -10344.55 | 6803.1218 | 0.5220 |
+| 8 | DH-Funding Rate | `0xa6b72ea0ef4542d520aa78f8d749ab4f2714b63d` | -0.011681 | 9746.61 | 4408.58 | -1822.68 | 1085.0837 | 0.5194 |
+| 9 | Storm | `0xae08a2282d969bd0c4bf63a626ab8f8e6200022d` | -0.027282 | 30789.17 | 789.17 | -3024.42 | 994.9112 | 0.5156 |
+| 10 | Flagship by Fire Labs | `0x632df0dbe24f3dac3e1c4e0596c96a0adc3ba86a` | -0.008497 | 17679.12 | 2764.56 | -49531.62 | 32203.3217 | 0.5136 |
+| 11 | Bitcoin Moving Average Long/Short | `0xb1505ad1a4c7755e0eb236aa2f4327bfc3474768` | -0.006385 | 3385434.56 | 265341.55 | -360419.11 | 231885.5408 | 0.5048 |
+| 12 | Loop Fund | `0xfeab64de8cdf9dcebc0f49812499e396273efc06` | -0.072140 | 66272.74 | 74851.87 | -36529.51 | 15167.8595 | 0.5048 |
+| 13 | Loong | `0x3daa34fb415e55fc5091df17f5c88cd552f88e46` | -0.000001 | 2759.33 | 143741.88 | -25785.74 | 37933.5022 | 0.5029 |
+| 14 | [ Sidelined ] Market Neutral 1 | `0xf4ab2cb15b7b3fa298555b801e9f5772ba8f8891` | -0.002660 | 35192.67 | 4160.84 | -1787.81 | 1449.7069 | 0.5020 |
+| 15 | Follow the Money | `0x0405e04a717fae31cd3d19242976aa2ffe1ed791` | -0.035849 | 4267.92 | 472.62 | -819.41 | 412.9039 | 0.5007 |
+| 16 | JizzJazz | `0x82eba5dc675279cb5967952f0c4b5184505eb17c` | -0.003691 | 143828.12 | 21697.15 | -34727.36 | 14838.7303 | 0.5002 |
+| 17 | TB10 (Top and Bottom 10) | `0xd8bc568c79e9a75563910e82e528596b49065cc9` | -0.043258 | 5591.64 | 178.23 | -258.51 | 126.5469 | 0.4948 |
+| 18 | Orange Coin Green PNL | `0x58428d381ee757303234b75545b3fddd6884de0f` | -0.070724 | 2935.21 | 833.97 | -409.89 | 334.9020 | 0.4887 |
+| 19 | Sentiment Edge | `0x026a2e082a03200a00a97974b7bf7753ce33540f` | -0.027903 | 109504.08 | 26135.78 | -7276.01 | 4078.1391 | 0.4876 |
+| 20 | [ Broadcraft Capital ] Tradewinds | `0xe76c9c59157c993ac3cb405defb7992661b57fed` | -0.067700 | 2447.01 | 324.19 | -260.02 | 199.8370 | 0.4841 |
