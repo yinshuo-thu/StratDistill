@@ -25,6 +25,7 @@
     说明：action 来自公开 <code>userFills</code>，按 leader 聚合，仅作为 position / action proxy。<br/>
     图例说明：<b>PnL curve</b> = 蓝线；<b>绿色点</b> = closed pnl &gt; 0；<b>红色点</b> = closed pnl &lt; 0；<b>灰色点</b> = closed pnl ≈ 0 / N.A.；<b>▲</b> = buy / long / open；<b>▼</b> = sell / short；<b>✕</b> = close；点越大表示成交规模（|sz|）越大。
   </div>
+  <div id="buildMeta" class="meta" style="margin-top:6px;"></div>
 
   <div class="row card">
     <label>选择策略：</label>
@@ -194,6 +195,16 @@
       }, 0);
     }
 
+    function renderBuildMeta(){
+      const meta = DATA?.meta || {};
+      const generatedAt = meta.generated_at || '-';
+      const schemaVersion = meta.schema_version ?? 'legacy';
+      const fillsFile = meta.leader_fills_file || '-';
+      const detailsFile = meta.vault_details_file || '-';
+      const note = meta.schema_version ? '' : ' | ⚠️ legacy bundle detected';
+      document.getElementById('buildMeta').innerHTML = `data build: <code>${generatedAt}</code> | schema: <code>${schemaVersion}</code> | fills: <code>${fillsFile}</code> | details: <code>${detailsFile}</code>${note}`;
+    }
+
     function renderSummary(s){
       document.getElementById('summary').innerHTML = `
         <div><b>${s.name}</b></div>
@@ -289,7 +300,7 @@
 
       if(!overlay.length){
         actionLayout.annotations.push({
-          text: timedPnlSeries ? 'No actions available for current filter.' : 'No timed PnL series available, so actions cannot be accurately anchored on the PnL curve.',
+          text: timedPnlSeries ? 'No actions available for current filter.' : 'No timed PnL series in current data bundle. Re-run scripts/build_web_data.py to rebuild top_strategies.json.',
           xref:'paper', yref:'paper', x:0.5, y:0.95, showarrow:false, font:{size:12, color:'#6b7280'}
         });
       }
@@ -300,6 +311,7 @@
     async function boot(){
       const resp = await fetch('./data/top_strategies.json');
       DATA = await resp.json();
+      renderBuildMeta();
       const sel = document.getElementById('strategySelect');
       DATA.strategies.forEach((s, i) => {
         const o = document.createElement('option');

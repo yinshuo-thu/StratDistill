@@ -124,13 +124,13 @@ def run_enrichment(top_k: int = 200) -> EnrichArtifacts:
     merged = master.merge(details, on="vault_address", how="left")
     merged["withdrawable_ratio"] = merged["max_withdrawable"] / merged["max_distributable"]
 
-    # extended ranking adds detail-derived terms; higher score always means better.
-    def nrm(s, higher_is_better=True):
-        return s.rank(method="average", ascending=not higher_is_better, pct=True).fillna(0.0)
+    # extended ranking adds details quality terms
+    def nrm(s, asc=False):
+        return s.rank(method="average", ascending=asc, pct=True).fillna(0.0)
 
-    merged["score_commission"] = nrm(merged["leader_commission"], higher_is_better=False)
-    merged["score_withdrawable"] = nrm(merged["withdrawable_ratio"], higher_is_better=True)
-    merged["score_av_depth"] = nrm(merged["av_all_time_obs"], higher_is_better=True)
+    merged["score_commission"] = nrm(merged["leader_commission"], asc=True)
+    merged["score_withdrawable"] = nrm(merged["withdrawable_ratio"], asc=False)
+    merged["score_av_depth"] = nrm(merged["av_all_time_obs"], asc=False)
 
     merged["extended_score"] = (
         0.75 * merged["composite_score"].fillna(0.0)
