@@ -23,7 +23,7 @@
   <h2>StratDistill Top Strategies Dashboard</h2>
   <div class="meta">
     说明：action 来自公开 <code>userFills</code>，按 leader 聚合，仅作为 position / action proxy。<br/>
-    当前主图会把 action marker 叠加到策略净值 / PnL 曲线上，方便观察“何时动手、动作之后曲线处于什么位置”。
+    图例说明：<b>PnL curve</b> = 蓝线；<b>绿色点</b> = closed pnl &gt; 0；<b>红色点</b> = closed pnl &lt; 0；<b>灰色点</b> = closed pnl ≈ 0 / N.A.；<b>▲</b> = buy / long / open；<b>▼</b> = sell / short；<b>✕</b> = close；点越大表示成交规模（|sz|）越大。
   </div>
 
   <div class="row card">
@@ -62,33 +62,93 @@
     }
 
     function filteredActions(fills, mode){
-      if(mode==='all') return fills;
-      return fills.filter(f => {
+      if(mode==='all') return fills || [];
+      return (fills || []).filter(f => {
         const d=(f.dir||'').toLowerCase();
         if(mode==='close') return d.includes('close');
-        return d.includes('buy') || d.includes('sell') || d.includes('long') || d.includes('short');
+        return d.includes('buy') || d.includes('sell') || d.includes('long') || d.includes('short') || d.includes('open');
       });
     }
 
     function actionSymbol(f){
       const d = (f.dir || '').toLowerCase();
-      if(d.includes('close')) return 'circle';
-      if(d.includes('buy') || d.includes('long')) return 'triangle-up';
+      if(d.includes('close')) return 'x';
       if(d.includes('sell') || d.includes('short')) return 'triangle-down';
-      return 'diamond';
+      return 'triangle-up';
     }
 
     function actionColor(f){
-      const d = (f.dir || '').toLowerCase();
-      const pnl = Number(f.closedPnl || 0);
-      if(d.includes('close')) return pnl >= 0 ? '#16a34a' : '#dc2626';
-      if(d.includes('buy') || d.includes('long')) return '#2563eb';
-      if(d.includes('sell') || d.includes('short')) return '#f59e0b';
-      return '#7c3aed';
+      const pnl = Number(f.closedPnl);
+      if(Number.isNaN(pnl) || Math.abs(pnl) < 1e-12) return '#6b7280';
+      return pnl > 0 ? '#16a34a' : '#dc2626';
+    }
+
+    function actionSize(f){
+      return Math.max(8, Math.min(18, Math.log1p(Math.abs(Number(f.sz) || 0)) * 4));
+    }
+
+    function normalizeSeriesItem(item, sourceHint=null){
+      let time = item?.time ?? null;
+      if((time === null || time === undefined) && item?.ts){
+        const parsed = new Date(item.ts).getTime();
+        if(Number.isFinite(parsed)) time = parsed;
+      }
+      const idx = item?.idx ?? null;
+      const value = item?.value ?? item?.v ?? null;
+      return {
+        time: time === null || time === undefined ? null : Number(time),
+        idx: idx === null || idx === undefined ? null : Number(idx),
+        value: Number(value),
+        source: item?.source || sourceHint || null,
+      };
+    }
+
+    function sortSeries(series){
+      return (series || []).slice().sort((a, b) => {
+        const ax = a.time ?? a.idx ?? 0;
+        const bx = b.time ?? b.idx ?? 0;
+        return ax - bx;
+      });
+    }
+
+    function extractSeries(strategy, sType, metric='preferred'){
+      const rawSeries = strategy?.series;
+
+      if(Array.isArray(rawSeries)){
+        const bucket = rawSeries.filter(x => x.series === sType);
+        const account = bucket.filter(x => x.source === 'accountValueHistory');
+        const pnl = bucket.filter(x => x.source !== 'accountValueHistory');
+
+        let picked = bucket;
+        if(metric === 'account') picked = account.length ? account : bucket;
+        else if(metric === 'pnl') picked = pnl.length ? pnl : bucket;
+        else picked = account.length ? account : (pnl.length ? pnl : bucket);
+
+        return sortSeries(picked.map(x => normalizeSeriesItem(x)));
+      }
+
+      const typed = (rawSeries || {})[sType] || {};
+      const account = Array.isArray(typed.account) ? typed.account : [];
+      const pnl = Array.isArray(typed.pnl) ? typed.pnl : [];
+      let picked = [];
+      let sourceHint = null;
+
+      if(metric === 'account') {
+        picked = account.length ? account : pnl;
+        sourceHint = account.length ? 'accountValueHistory' : 'pnlHistory';
+      } else if(metric === 'pnl') {
+        picked = pnl.length ? pnl : account;
+        sourceHint = pnl.length ? 'pnlHistory' : 'accountValueHistory';
+      } else {
+        picked = account.length ? account : pnl;
+        sourceHint = account.length ? 'accountValueHistory' : 'pnlHistory';
+      }
+
+      return sortSeries(picked.map(x => normalizeSeriesItem(x, sourceHint)));
     }
 
     function hasTimeSeries(series){
-      return series.some(x => x.time !== null && x.time !== undefined);
+      return (series || []).some(x => Number.isFinite(x.time));
     }
 
     function nearestCurvePoint(points, targetTime){
@@ -106,14 +166,14 @@
     }
 
     function buildOverlayMarkers(series, fills){
-      const timePoints = series
-        .filter(x => x.time !== null && x.time !== undefined)
+      const timePoints = (series || [])
+        .filter(x => Number.isFinite(x.time) && Number.isFinite(x.value))
         .map(x => ({ time: Number(x.time), value: Number(x.value) }))
         .sort((a, b) => a.time - b.time);
       if(!timePoints.length) return [];
 
-      return fills
-        .filter(f => f.time)
+      return (fills || [])
+        .filter(f => Number.isFinite(Number(f.time)))
         .map(f => {
           const pt = nearestCurvePoint(timePoints, Number(f.time));
           if(!pt) return null;
@@ -124,6 +184,14 @@
           };
         })
         .filter(Boolean);
+    }
+
+    function countSeriesPoints(strategy){
+      const rawSeries = strategy?.series;
+      if(Array.isArray(rawSeries)) return rawSeries.length;
+      return Object.values(rawSeries || {}).reduce((sum, bucket) => {
+        return sum + Object.values(bucket || {}).reduce((inner, arr) => inner + (Array.isArray(arr) ? arr.length : 0), 0);
+      }, 0);
     }
 
     function renderSummary(s){
@@ -140,7 +208,7 @@
           <div class="metric"><div class="label">All-time PnL</div><div class="value">${fmt(s.pnl_all_time_last, 0)}</div></div>
           <div class="metric"><div class="label">Max Drawdown</div><div class="value">${fmt(s.pnl_all_time_max_dd, 0)}</div></div>
           <div class="metric"><div class="label">Stability (std ΔPnL)</div><div class="value">${fmt(s.pnl_all_time_stability, 0)}</div></div>
-          <div class="metric"><div class="label">Series / Fills</div><div class="value">${s.series.length} / ${s.fills.length}</div></div>
+          <div class="metric"><div class="label">Series / Fills</div><div class="value">${countSeriesPoints(s)} / ${(s.fills || []).length}</div></div>
         </div>
       `;
     }
@@ -152,88 +220,81 @@
       const s = DATA.strategies[idx];
       renderSummary(s);
 
-      const ser = s.series
-        .filter(x => x.series === sType)
-        .slice()
-        .sort((a, b) => {
-          const ax = a.time ?? a.idx ?? 0;
-          const bx = b.time ?? b.idx ?? 0;
-          return ax - bx;
-        });
+      const displaySeries = extractSeries(s, sType, 'preferred');
       const acts = filteredActions(s.fills, aMode).slice().sort((a, b) => (a.time || 0) - (b.time || 0));
-      const timedSeries = hasTimeSeries(ser);
-      const lineName = ser[0]?.source === 'accountValueHistory' ? `${sType} account value` : `${sType} pnl`;
-      const lineX = timedSeries ? ser.map(x => new Date(x.time)) : ser.map(x => x.idx);
-      const lineY = ser.map(x => x.value);
+      const timedDisplaySeries = hasTimeSeries(displaySeries);
+      const displayLabel = displaySeries[0]?.source === 'accountValueHistory' ? `${sType} account value` : `${sType} pnl`;
+      const displayX = timedDisplaySeries ? displaySeries.map(x => new Date(x.time)) : displaySeries.map(x => x.idx);
+      const displayY = displaySeries.map(x => x.value);
 
-      const traces = [{
-        x: lineX,
-        y: lineY,
+      Plotly.newPlot('seriesChart', [{
+        x: displayX,
+        y: displayY,
         type:'scatter',
         mode:'lines',
-        name: lineName,
+        name: displayLabel,
         line:{width:2, color:'#111827'},
-        hovertemplate: timedSeries ? 'value=%{y}<br>%{x}<extra></extra>' : 'idx=%{x}<br>value=%{y}<extra></extra>'
+        hovertemplate: timedDisplaySeries ? 'value=%{y}<br>%{x}<extra></extra>' : 'idx=%{x}<br>value=%{y}<extra></extra>'
+      }], {
+        title:`${s.name} - ${sType} curve`,
+        xaxis:{title: timedDisplaySeries ? 'Time' : 'Index'},
+        yaxis:{title: displaySeries[0]?.source === 'accountValueHistory' ? 'Account Value / NAV' : 'PnL'},
+        legend:{orientation:'h'}
+      }, {responsive:true});
+
+      const pnlSeries = extractSeries(s, sType, 'pnl');
+      const timedPnlSeries = hasTimeSeries(pnlSeries);
+      const pnlX = timedPnlSeries ? pnlSeries.map(x => new Date(x.time)) : pnlSeries.map(x => x.idx);
+      const pnlY = pnlSeries.map(x => x.value);
+      const overlay = buildOverlayMarkers(pnlSeries, acts);
+      const detailTexts = overlay.map(x => `${x.dir || '-'} ${x.coin || ''}<br>fill px=${fmt(x.px)}<br>sz=${fmt(x.sz)}<br>closedPnl=${fmt(x.closedPnl)}<br>anchored to nearest pnl point`);
+
+      const actionTraces = [{
+        x: pnlX,
+        y: pnlY,
+        mode:'lines',
+        type:'scatter',
+        name:'PnL curve',
+        line:{width:2, color:'#2563eb'},
+        hovertemplate: timedPnlSeries ? 'pnl=%{y}<br>%{x}<extra></extra>' : 'idx=%{x}<br>pnl=%{y}<extra></extra>'
       }];
 
-      const overlay = buildOverlayMarkers(ser, acts);
       if(overlay.length){
-        traces.push({
+        actionTraces.push({
           x: overlay.map(x => new Date(x.curveTime)),
           y: overlay.map(x => x.curveValue),
           mode:'markers',
           type:'scatter',
-          name:'actions on curve',
+          name:'Actions (size=|sz|, color=closed pnl, shape=side)',
           marker:{
-            size:10,
+            size: overlay.map(actionSize),
             color: overlay.map(actionColor),
             symbol: overlay.map(actionSymbol),
-            line:{width:0.5, color:'#111827'},
+            line:{width:0.8, color:'#111827'},
             opacity:0.9,
           },
-          text: overlay.map(x => `${x.dir || '-'} ${x.coin || ''}<br>fill px=${fmt(x.px)}<br>size=${fmt(x.sz)}<br>closedPnl=${fmt(x.closedPnl)}<br>marker anchored to nearest curve point`),
+          text: detailTexts,
           hovertemplate:'%{text}<br>%{x}<extra></extra>'
         });
       }
 
-      Plotly.newPlot('seriesChart', traces, {
-        title:`${s.name} - ${sType} curve with action overlay`,
-        xaxis:{title: timedSeries ? 'Time' : 'Index'},
-        yaxis:{title: ser[0]?.source === 'accountValueHistory' ? 'Account Value / NAV' : 'PnL'},
-        legend:{orientation:'h'}
-      }, {responsive:true});
+      const actionLayout = {
+        title:`${s.name} - PnL with action overlay (${aMode})`,
+        xaxis:{title: timedPnlSeries ? 'Time' : 'Index'},
+        yaxis:{title:'PnL'},
+        legend:{orientation:'h'},
+        hovermode:'x unified',
+        annotations: []
+      };
 
-      const detailTimes = acts.map(x => new Date(x.time));
-      const detailTexts = acts.map(x => `${x.dir || '-'} ${x.coin || ''}<br>px=${fmt(x.px)}<br>sz=${fmt(x.sz)}<br>closedPnl=${fmt(x.closedPnl)}`);
-      Plotly.newPlot('actionChart', [
-        {
-          x: detailTimes,
-          y: acts.map(x => x.px || null),
-          mode:'markers+lines',
-          type:'scatter',
-          name:'fill price',
-          marker:{size:7, color:acts.map(actionColor), symbol:acts.map(actionSymbol), opacity:0.8},
-          text: detailTexts,
-          hovertemplate:'%{text}<br>%{x}<extra></extra>'
-        },
-        {
-          x: detailTimes,
-          y: acts.map(x => x.closedPnl || 0),
-          mode:'markers',
-          type:'scatter',
-          name:'closed pnl per fill',
-          yaxis:'y2',
-          marker:{size:7, color:acts.map(x => Number(x.closedPnl || 0) >= 0 ? '#16a34a' : '#dc2626'), opacity:0.55},
-          text: detailTexts,
-          hovertemplate:'%{text}<br>%{x}<extra></extra>'
-        }
-      ], {
-        title:`${s.name} - action details (${aMode})`,
-        xaxis:{title:'Time'},
-        yaxis:{title:'Fill Price'},
-        yaxis2:{title:'Closed PnL per Fill', overlaying:'y', side:'right', showgrid:false},
-        legend:{orientation:'h'}
-      }, {responsive:true});
+      if(!overlay.length){
+        actionLayout.annotations.push({
+          text: timedPnlSeries ? 'No actions available for current filter.' : 'No timed PnL series available, so actions cannot be accurately anchored on the PnL curve.',
+          xref:'paper', yref:'paper', x:0.5, y:0.95, showarrow:false, font:{size:12, color:'#6b7280'}
+        });
+      }
+
+      Plotly.newPlot('actionChart', actionTraces, actionLayout, {responsive:true});
     }
 
     async function boot(){
